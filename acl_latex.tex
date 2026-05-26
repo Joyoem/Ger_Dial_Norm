@@ -1,0 +1,250 @@
+\documentclass[11pt]{article}
+
+% Change "review" to "final" to generate the final (sometimes called camera-ready) version.
+% Change to "preprint" to generate a non-anonymous version with page numbers.
+\usepackage[review]{acl}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+
+% For proper rendering and hyphenation of words containing Latin characters (including in bib files)
+\usepackage[T1]{fontenc}
+
+% This assumes your files are encoded as UTF8
+\usepackage[utf8]{inputenc}
+
+% This is not strictly necessary, and may be commented out,
+% but it will improve the layout of the manuscript,
+% and will typically save some space.
+\usepackage{microtype}
+
+% This is also not strictly necessary, and may be commented out.
+% However, it will improve the aesthetics of text in
+% the typewriter font.
+\usepackage{inconsolata}
+
+% Including images in your LaTeX document requires adding
+% additional package(s)
+\usepackage{graphicx}
+
+% If the title and author information does not fit in the area allocated, uncomment the following
+%
+% \setlength\titlebox{<dim>}
+%
+% and set <dim> to something 5cm or larger.
+
+% ANONYMIZED FOR SUBMISSION
+\title{Dialect Preservation or Normalization?
+A Cross-Paradigm Study of German Dialect Transcription}
+
+\author{Anonymous \\
+  Anonymous Affiliation \\
+  \texttt{anonymized@example.com} \\\And
+  Anonymous \\
+  Anonymous Affiliation \\
+  \texttt{anonymized@example.com} \\}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We study how modern speech foundation models transcribe dialectal speech under a dialect-standard continuum setting. Using Swiss German (SwissDial) and Southern German dialects (Bethupferl), we analyze the trade-off between dialect preservation and standard language normalization across CTC-based and generative ASR models. We introduce a directional metric, Dialect Preference Score (DPS), to quantify model bias along this continuum. Our findings reveal systematic paradigm-dependent differences: CTC models preserve dialectal forms more strongly, while generative models exhibit stronger normalization tendencies. However, we also observe an emergent hybrid behavior in large language model-based ASR systems, revealing a \textit{hybrid register} where dialectal syntax co-occurs with standardized lexical forms, challenging the traditional binary view of ASR normalization.
+\end{abstract}
+
+\section{Introduction}
+
+Speech recognition for dialectal languages remains challenging due to the absence of standardized orthography and strong variation in phonetic realizations. While prior work has focused on improving recognition accuracy, less attention has been paid to how models behave when confronted with dialectal variation: whether they preserve dialectal forms or normalize outputs toward standard language.
+
+In this paper, we shift the focus from accuracy to behavioral analysis of ASR systems under dialectal variation. We ask: do speech foundation models recognize dialects as distinct linguistic forms, or do they implicitly normalize them into standard language? This question is not merely academic: as ASR systems are deployed globally, their treatment of dialectal variation has practical implications for accessibility and linguistic diversity.
+
+We study this question across two datasets—SwissDial (a parallel corpus enabling direct dialect-to-standard comparison) and Bethupferl (a historical Southern German corpus used for robustness validation)—and multiple ASR paradigms, including CTC-based models (wav2vec2-XLS-R), generative speech models (Whisper), and LLM-based ASR systems (Qwen-ASR). By introducing the Dialect Preference Score (DPS), a simple directional metric that compares model output similarity to dialect versus standard references, we quantify model normalization tendencies along the dialect-standard continuum.
+
+Our findings reveal three distinct behavioral regimes. First, CTC-based models exhibit positive DPS, indicating acoustic faithfulness: without a strong language model prior, they preserve dialectal phonetic forms. Second, generative models (Whisper) show consistently negative DPS, with larger models exhibiting stronger standardization—a counterintuitive finding where increased capacity amplifies, rather than mitigates, bias. Third, LLM-based ASR systems display near-zero DPS while maintaining high absolute similarity to both references, revealing a hybrid register where dialectal syntax coexists with standardized orthography.
+
+These results suggest that the relationship between model architecture and dialect preservation is not binary but continuous, shaped by decoding priors, tokenization, and training distributions. We release our evaluation framework to facilitate further research into dialect-aware ASR evaluation.
+
+\section{Methodology}
+
+\subsection{Datasets}
+
+\textbf{SwissDial.} \cite{dogan2021swissdial} introduced SwissDial, a parallel corpus of eight Swiss German dialects paired with Standard High German references. Each utterance provides both a dialect transcription, orthographically normalized following Swiss German conventions, and a standard German reference. This design allows us to directly measure how much a transcription diverges from the dialect versus the standard. The corpus covers diverse topics and speakers, with roughly 23,000 aligned utterances across eight dialect regions: Aargau, Bern, Basel, Graubünden, Luzern, St. Gallen, Valais, and Zurich.
+
+\textbf{Bethupferl.} \cite{blaschke2025betthupferl} presented Betthupferl, an evaluation dataset containing four hours of read speech from three dialect groups in Southeast Germany: Franconian, Bavarian, and Alemannic (Swabian). Unlike SwissDial, the alignment here is looser. Since no widely used orthography exists for these dialects, the dialectal transcriptions use ad-hoc pronunciation spellings based on Standard German grapheme-phoneme mappings. The mean word-level Levenshtein distance between the dialectal and Standard German references is 57\%, and the character-level distance is 24\%. We use Betthupferl as an external validation set for robustness analysis rather than for absolute DPS comparison, treating its standard-like references as approximate anchors.
+
+\subsection{Models}
+
+We evaluate three model families representing distinct architectural paradigms:
+
+\begin{itemize}
+\item \textbf{CTC-based models:} wav2vec2 XLS-R (300M and 1B parameters). These models use Connectionist Temporal Classification loss and have no explicit language model component during inference.
+\item \textbf{Generative ASR models:} Whisper (Tiny through Large-v3). These models employ an encoder-decoder architecture with an autoregressive language model decoder trained on standard-dominant text.
+\item \textbf{LLM-ASR models:} Qwen3-ASR (0.6B and 1.7B parameters). These systems integrate a large language model component into the ASR pipeline, enabling more flexible text generation but also stronger linguistic priors.
+\end{itemize}
+
+\subsection{Metric: Dialect Preference Score (DPS)}
+
+We define two normalized character-level similarity measures based on Levenshtein distance. Character-level measures provide cross-linguistically comparable signal even for languages with rich inflectional morphology, avoiding the tokenization biases that plague word-level metrics when comparing dialectal and standard varieties.
+
+Let $P$ denote the model's predicted transcription, $T_{\text{dial}}$ the dialect reference transcription, and $T_{\text{std}}$ the standard language reference transcription. We define:
+
+\begin{equation}
+\text{Sim}_{\text{dial}} = 1 - \frac{\text{Edit}(P, T_{\text{dial}})}{\max(|P|, |T_{\text{dial}}|)}
+\end{equation}
+
+\begin{equation}
+\text{Sim}_{\text{std}} = 1 - \frac{\text{Edit}(P, T_{\text{std}})}{\max(|P|, |T_{\text{std}}|)}
+\end{equation}
+
+where $\text{Edit}(\cdot, \cdot)$ denotes Levenshtein distance at the character level. Normalization by the maximum sequence length ensures $\text{Sim}_{\text{dial}}, \text{Sim}_{\text{std}} \in [0, 1]$, where $1$ indicates perfect identity and $0$ indicates no character overlap.
+
+The Dialect Preference Score is then:
+
+\begin{equation}
+\text{DPS} = \text{Sim}_{\text{dial}} - \text{Sim}_{\text{std}}
+\end{equation}
+
+A positive DPS indicates the model's output is closer to the dialect reference than to the standard reference, reflecting dialect-preserving behavior. A negative DPS indicates standardization bias toward standard language. DPS near zero may indicate either model neutrality or, as we observe in Section~\ref{sec:hybrid}, a hybrid regime where the model achieves high similarity to both references simultaneously.
+
+\textbf{Collapse Filter.} To avoid survival bias in noisy conditions, we exclude samples where:
+
+\begin{equation}
+\max(\text{Sim}_{\text{dial}}, \text{Sim}_{\text{std}}) < 0.1
+\end{equation}
+
+This threshold filters cases where the model produces degenerate outputs (e.g., repetitive character sequences, empty strings) that would produce artificially neutral DPS values by virtue of low similarity to both references rather than genuine dialectal balance.
+
+\subsection{Noise Setting}
+
+For SwissDial, we evaluate robustness under additive Gaussian noise at SNR levels $\{20, 10, 0\}$ dB. This controlled degradation allows us to probe how architectural priors interact with degraded acoustic evidence: when the input signal becomes less reliable, does the model rely more heavily on its language model prior?
+
+\section{Results}
+
+\subsection{Paradigm Gap: CTC vs Generative Models}
+
+On SwissDial, we observe a clear separation between model families (Figure~\ref{fig:paradigm_gap}). 
+CTC-based models exhibit positive DPS, indicating stronger alignment with dialectal forms, while generative ASR models consistently show negative DPS, suggesting systematic normalization toward standard German.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{Gemini_Generated_Image_nkvb5fnkvb5fnkvb.png}
+    \caption{Diverging Normalization Regimes Across Paradigms and Datasets. CTC models preserve acoustic fidelity, while generative models (Whisper/Qwen) exhibit strong standardization bias.}
+    \label{fig:paradigm_gap}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\caption{Dialect Preference Scores on SwissDial and Bethupferl}
+\label{tab:main_results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model} & \textbf{SwissDial DPS} & \textbf{Bethupferl DPS} \\
+\midrule
+wav2vec2-XLS-R-300M & $+0.086$ & $---$ \\
+wav2vec2-XLS-R-1B   & $+0.065$ & $-0.075$ \\
+Whisper-tiny        & $---$    & $-0.10$  \\
+Whisper-small       & $---$    & $-0.12$  \\
+Whisper-medium      & $-0.074$ & $-0.14$  \\
+Whisper-large-v3    & $-0.082$ & $-0.183$ \\
+Qwen3-ASR-0.6B      & $-0.002$ & $---$    \\
+Qwen3-ASR-1.7B      & $-0.014$ & $-0.014$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Emergent Hybrid Behavior in LLM-ASR Systems}
+\label{sec:hybrid}
+
+Qwen3-ASR models exhibit near-zero DPS. However, both models maintain high similarity to \textit{both} references: $\text{Sim}_{\text{dial}} \approx \text{Sim}_{\text{std}} \approx 0.81$. This represents a \textbf{hybrid transcription regime} where dialectal structure and standard orthography co-exist, revealing a hybrid register that breaks the traditional trade-off.
+
+\begin{table}[t]
+\centering
+\caption{Example Transcriptions from Three Paradigms}
+\label{tab:qualitative}
+\begin{tabular}{p{2.5cm}p{8cm}}
+\toprule
+\textbf{Role} & \textbf{Text} \\
+\midrule
+Swiss German Ref & i cha nid chö, wil mini mueter chrank isch \\
+Standard German Ref & ich kann nicht kommen, weil meine mutter krank ist \\
+\hline
+\texttt{wav2vec2-1B} & i cha nid chö wil mini mueter chrank isch \\
+Whisper-large-v3 & ich kann nicht kommen, weil meine mutter krank ist \\
+Qwen3-ASR-1.7B & i cha nicht kommen, weil meine mutter krank ist \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Cross-Dataset Robustness}
+
+On Bethupferl, all models exhibit strongly negative DPS. We attribute this shift not to model collapse, but to annotation and orthographic standardization bias inherent in the historical nature of the Bethupferl corpus. Importantly, model ranking remains stable across datasets, demonstrating robust relative consistency.
+
+\subsection{Noise Robustness}
+
+Under increasing acoustic noise on SwissDial, we observe that acoustic uncertainty amplifies reliance on language model priors (Figure~\ref{fig:noise}). 
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{FIG3_Comparison.png}
+    \caption{Acoustic Uncertainty Probe: Noise-driven Standardization Regimes. Generative models exhibit monotonic drift toward standardization as SNR decreases, whereas CTC models maintain robust fidelity.}
+    \label{fig:noise}
+\end{figure}
+
+As SNR decreases, the generative models increasingly default to their standard German prior, overriding ambiguous acoustic evidence. Conversely, CTC models lack such a prior and produce higher-variance outputs that remain dialect-preserving.
+
+\section{Related Work}
+
+Our findings engage with and extend four strands of recent research on linguistic variation in language models.
+
+\textbf{Measuring Bias in Language Models.} \citet{nadeem2021stereoset} introduced StereoSet, using difference scores between stereotypical and anti-stereotypical associations to quantify bias while controlling for language modeling ability. Our DPS adopts a similar difference-score logic but extends it from text-based fill-in-the-blank tasks to continuous speech transcription, where the contrastive reference is the standard language rather than an anti-stereotype.
+
+\textbf{Dialect Bias in Generation.} \citet{deas2023evaluation} evaluated LLM bias against African American Language through counterpart generation, highlighting a methodological challenge: standard metrics penalize legitimate dialectal variation as error. Our dual-reference DPS directly addresses this by measuring directional preference rather than absolute accuracy.
+
+\textbf{Standard Language Default.} \citet{fleisig2024linguistic} found that ChatGPT defaults to standard English varieties when responding to non-standard inputs. This "default to standard" phenomenon parallels our observation of Whisper's negative DPS drift: both reflect a model prior that treats standard language as the unmarked default, even when input evidence suggests otherwise.
+
+\textbf{Cultural Bias in Multilingual Models.} \citet{naous2024having} showed that multilingual models exhibit systematic preference for Western entities, with culturally-relevant demonstrations helping but not eliminating bias. Their finding that multilingual training can increase Western bias resonates with our observation that multilingual generative models (Whisper) exhibit stronger standardization than monolingual CTC models.
+
+\textbf{Cross-Linguistic Language Modeling.} \citet{cotterell2018are} demonstrated that language models perform worse on languages with rich inflectional morphology, and that this gap disappears with lemmatization. Their use of character-level metrics for fair cross-linguistic comparison directly informs our methodological choices.
+
+Across these prior works, a consistent theme emerges: models trained on standard or high-resource varieties learn priors that disadvantage non-standard varieties. Our contribution is to demonstrate that this effect varies systematically by architectural paradigm—CTC models resist normalization, generative models amplify it, and LLM-ASR models create a novel hybrid register.
+
+\section{Discussion}
+
+\subsection{Tokenizer-Induced Normalization Bias}
+
+One contributing factor to the observed standardization behavior is what we term \textbf{tokenizer-induced normalization bias}. Byte-Pair Encoding (BPE) tokenizers, which power nearly all modern ASR and LLM systems, are constructed by merging the most frequent character pairs in a training corpus. When that corpus is dominated by standard German, the resulting merge operations capture standard language morphology while leaving dialectal forms to be represented as character sequences. For example, the Swiss German \textit{chö} may be tokenized as separate characters while the standard \textit{kommen} is a single token—a representational asymmetry that biases the model toward standard outputs even before decoding begins.
+
+This tokenizer-level account explains why the relative ordering of model families remains stable across SwissDial and Bethupferl despite absolute DPS differences. The tokenizer determines the fundamental representational vocabulary; models can only reweight probabilities over these predefined units.
+
+\subsection{Annotation Bias as Signal}
+
+Bethupferl's negative DPS shift, rather than being treated as a nuisance, provides evidence of \textbf{annotation standardization bias} that mirrors tokenizer bias. Historical dialect corpora were often transcribed with implicit normalization toward standard orthography, reflecting annotator linguistic ideologies. The fact that models exhibit even stronger negative DPS on such a corpus suggests they have learned to \textit{amplify} existing normalization biases.
+
+\subsection{Implications for Evaluation}
+
+Our findings suggest that current evaluation practices for dialectal ASR may need reconsideration. Standard word-error-rate metrics penalize legitimate dialectal variation as errors, conflating recognition accuracy with normalization bias. The DPS provides a complementary metric that isolates directional preference, enabling more nuanced comparison across models and datasets. Future work may explore whether shared orthographic conventions for major dialect groups improve evaluation robustness.
+
+\section{Limitations}
+
+Several limitations should be acknowledged. First, our analysis focuses on German dialect varieties; findings may not generalize to other language families with different typological relationships between standard and dialect varieties. Second, the Bethupferl corpus lacks explicit dialect references for each utterance, limiting our ability to compute absolute DPS values. We therefore treat it primarily as a relative ranking validator rather than for absolute comparison. Third, our analysis of tokenizer effects is correlational rather than causal; controlled experiments with custom tokenizers would be needed to establish causal mechanisms. Finally, while we focus on behavioral characterization rather than fairness claims, our findings may have implications for equitable ASR deployment that we do not explicitly address.
+
+\section{Conclusion}
+
+We present a cross-paradigm empirical study of dialectal transcription behavior in modern speech foundation models. Our results highlight systematic differences in normalization tendencies and reveal an emergent hybrid behavior in LLM-based ASR systems. CTC models preserve dialectal forms through acoustic faithfulness; generative ASR systems systematically normalize toward standard language; and LLM-ASR models produce a hybrid register that preserves syntax while standardizing lexicon—breaking the traditional zero-sum trade-off between dialect preservation and recognition accuracy.
+
+These findings suggest that the relationship between model architecture and dialect preservation is not binary but continuous, shaped by decoding priors, tokenization, and training distributions. We hope this work motivates further research into the behavioral characterization of speech models beyond traditional accuracy metrics, and encourages the development of evaluation frameworks that respect linguistic diversity.
+
+\section*{Acknowledgments}
+
+\textbf{Anonymized for submission.}
+
+% Custom bibliography entries only
+\bibliography{custom}
+
+\end{document}
